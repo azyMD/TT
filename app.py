@@ -37,20 +37,25 @@ def transcribe():
         extract_audio(filepath, audio_path)
 
     try:
-        transcription = openai.Audio.transcribe(
-            model="whisper-1",
-            file=open(audio_path, 'rb'),
-            language=language if language else None
-        )
-        raw_text = transcription['text']
+        # ✅ NEW SYNTAX
+        with open(audio_path, 'rb') as audio_file:
+            transcription = openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language=language if language else None
+            )
+        raw_text = transcription.text
 
-        gpt_response = openai.ChatCompletion.create(
+        gpt_response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "user", "content": f"Check this transcript for meaningful errors. If everything is fine, reply only: 'Text is OK'. If there are issues, propose an improved version:\n\n{raw_text}"}
+                {
+                    "role": "user",
+                    "content": f"Check this transcript for meaningful errors. If everything is fine, reply only: 'Text is OK'. If there are issues, propose an improved version:\n\n{raw_text}"
+                }
             ]
         )
-        result = gpt_response['choices'][0]['message']['content']
+        result = gpt_response.choices[0].message.content
 
         return jsonify({
             'original': raw_text,
@@ -58,14 +63,14 @@ def transcribe():
         })
 
     finally:
-        # Cleanup uploaded and generated files
         try:
-            os.remove(filepath)
+            if os.path.exists(filepath):
+                os.remove(filepath)
             if os.path.exists(audio_path) and audio_path != filepath:
                 os.remove(audio_path)
         except Exception as e:
             print(f"Cleanup failed: {e}")
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
