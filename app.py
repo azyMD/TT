@@ -3,16 +3,20 @@ from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import subprocess
-import openai
+from openai import OpenAI
 
+# Load environment variables
 load_dotenv()
 
+# Initialize Flask
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Create OpenAI client using new SDK pattern
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Extract audio from video using ffmpeg
 def extract_audio(input_path, output_path):
     subprocess.run([
         'ffmpeg', '-i', input_path, '-vn', '-acodec', 'mp3', output_path
@@ -37,16 +41,17 @@ def transcribe():
         extract_audio(filepath, audio_path)
 
     try:
-        # ✅ NEW SYNTAX
+        # Transcription with new OpenAI SDK
         with open(audio_path, 'rb') as audio_file:
-            transcription = openai.audio.transcriptions.create(
+            transcription = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 language=language if language else None
             )
         raw_text = transcription.text
 
-        gpt_response = openai.chat.completions.create(
+        # GPT-4 Review
+        gpt_response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {
@@ -63,6 +68,7 @@ def transcribe():
         })
 
     finally:
+        # Always clean up uploaded and generated files
         try:
             if os.path.exists(filepath):
                 os.remove(filepath)
@@ -73,4 +79,4 @@ def transcribe():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host='0.0.0.0', port=port)
